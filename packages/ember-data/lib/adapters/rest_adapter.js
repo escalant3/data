@@ -93,12 +93,11 @@ DS.RESTAdapter = DS.Adapter.extend({
     }
 
     var root = this.rootForType(type),
-        plural = this.pluralize(root),
-        primaryKey = getPath(type, 'proto.primaryKey');
+        plural = this.pluralize(root);
 
     var data = {};
     data[plural] = models.map(function(model) {
-      return get(model, primaryKey);
+      return get(model, 'id');
     });
 
     this.ajax("/" + this.pluralize(root) + "/delete", "POST", {

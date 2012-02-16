@@ -14,10 +14,11 @@
 var get = SC.get, set = SC.set, getPath = SC.getPath;
 var Person, store, adapter;
 
-module("DS.Adapter", {
+module("DS.Store and DS.Adapter integration test", {
   setup: function() {
     Person = DS.Model.extend({
-      updatedAt: DS.attr('string')
+      updatedAt: DS.attr('string'),
+      name: DS.attr('string')
     });
 
     adapter = DS.Adapter.create();
@@ -322,7 +323,7 @@ test("by default, commit calls deleteRecords once per type", function() {
   store.commit();
 });
 
-test("by default, createRecords calls create once per record", function() {
+test("by default, createRecords calls createRecord once per record", function() {
   expect(8);
   var count = 1;
 
@@ -479,11 +480,11 @@ test("if a created model is marked as invalid by the server, it enters an error 
     if (get(record, 'name').indexOf('Bro') === -1) {
       store.recordWasInvalid(record, { name: ['common... name requires a "bro"'] });
     } else {
-      store.didUpdateRecord(record);
+      store.didCreateRecord(record);
     }
   };
 
-  var yehuda = store.createRecord(Person, { name: "Yehuda Katz" });
+  var yehuda = store.createRecord(Person, { id: 1, name: "Yehuda Katz" });
   store.commit();
 
   equal(get(yehuda, 'isValid'), false, "the record is invalid");

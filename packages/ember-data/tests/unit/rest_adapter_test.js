@@ -4,6 +4,7 @@ var get = SC.get, set = SC.set;
 
 var adapter, store, ajaxUrl, ajaxType, ajaxHash;
 var Person, person, people;
+var Role, role, roles;
 
 module("the REST adapter", {
   setup: function() {
@@ -27,10 +28,22 @@ module("the REST adapter", {
       adapter: adapter
     });
 
-    Person = DS.Model.extend()
+    Person = DS.Model.extend({
+      name: DS.attr('string')
+    });
+
     Person.toString = function() {
       return "App.Person";
-    }
+    };
+
+    Role = DS.Model.extend({
+      name: DS.attr('string'),
+      primaryKey: '_id'
+    });
+
+    Role.toString = function() {
+      return "App.Role";
+    };
   },
 
   teardown: function() {
@@ -42,7 +55,7 @@ module("the REST adapter", {
 });
 
 var expectUrl = function(url, desc) {
-  equal(url, ajaxUrl, "the URL is " + desc);
+  equal(ajaxUrl, url, "the URL is " + desc);
 };
 
 var expectType = function(type) {
@@ -113,6 +126,20 @@ test("updating a person makes a POST to /people/:id with the data hash", functio
   equal(person, store.find(Person, 1), "the same person is retrieved by the same ID");
 });
 
+test("updating a record with custom primaryKey", function() {
+  set(adapter, 'bulkCommit', false);
+  store.load(Role, { _id: 1, name: "Developer" });
+
+  role = store.find(Role, 1);
+
+  set(role, 'name', "Manager");
+  store.commit();
+
+  expectUrl("/roles/1", "the plural of the model name with its ID");
+  ajaxHash.success({ person: { id: 1, name: "Manager" } });
+});
+
+
 test("deleting a person makes a DELETE to /people/:id", function() {
   set(adapter, 'bulkCommit', false);
 
@@ -136,6 +163,21 @@ test("deleting a person makes a DELETE to /people/:id", function() {
 
   ajaxHash.success({ success: true });
   expectState('deleted');
+});
+
+test("deleting a record with custom primaryKey", function() {
+  set(adapter, 'bulkCommit', false);
+
+  store.load(Role, { _id: 1, name: "Developer" });
+
+  role = store.find(Role, 1);
+
+  role.deleteRecord();
+
+  store.commit();
+
+  expectUrl("/roles/1", "the plural of the model name with its ID");
+  ajaxHash.success({ success: true });
 });
 
 test("finding a person by ID makes a GET to /people/:id", function() {

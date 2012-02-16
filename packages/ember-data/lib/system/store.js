@@ -133,7 +133,7 @@ DS.Store = Ember.Object.extend({
   _adapter: Ember.computed(function() {
     var adapter = get(this, 'adapter');
     if (typeof adapter === 'string') {
-      return getPath(this, adapter);
+      return getPath(this, adapter, false) || getPath(window, adapter);
     }
     return adapter;
   }).property('adapter').cacheable(),
@@ -144,28 +144,28 @@ DS.Store = Ember.Object.extend({
   // . CREATE NEW MODEL .
   // ....................
 
-  createRecord: function(type, hash, transaction) {
-    hash = hash || {};
+  createRecord: function(type, properties, transaction) {
+    properties = properties || {};
 
-    var id = hash[getPath(type, 'proto.primaryKey')] || null;
+    var id = properties[getPath(type, 'proto.primaryKey')] || null;
 
-    var model = type.create({
-      data: hash || {},
+    var model = type._create({
       store: this,
       transaction: transaction
     });
 
-    model.adapterDidCreate();
+    var hash = {}, clientId;
+
+    clientId = this.pushHash(hash, id, type);
+    model.send('setData', hash);
 
     var data = this.clientIdToHashMap(type);
     var models = get(this, 'models');
 
-    var clientId = this.pushHash(hash, id, type);
-
     set(model, 'clientId', clientId);
-
     models[clientId] = model;
 
+    model.setProperties(properties);
     this.updateModelArrays(type, clientId, hash);
 
     return model;
@@ -176,7 +176,7 @@ DS.Store = Ember.Object.extend({
   // ................
 
   deleteRecord: function(model) {
-    model.deleteRecord();
+    model.send('deleteRecord');
   },
 
   // ...............
@@ -203,7 +203,7 @@ DS.Store = Ember.Object.extend({
   */
   find: function(type, id, query) {
     if (id === undefined) {
-      return this.findMany(type, null, null);
+      return this.findAll(type);
     }
 
     if (query !== undefined) {
@@ -238,22 +238,22 @@ DS.Store = Ember.Object.extend({
       if (!model) {
         // create a new instance of the model in the
         // 'isLoading' state
-        model = this.createModel(type, clientId);
+        model = this.materializeRecord(type, clientId);
 
         // immediately set its data
-        model.setData(data[clientId] || null);
+        model.send('setData', data[clientId] || null);
       }
     } else {
       clientId = this.pushHash(null, id, type);
 
       // create a new instance of the model in the
       // 'isLoading' state
-      model = this.createModel(type, clientId);
+      model = this.materializeRecord(type, clientId);
 
       // let the adapter set the data, possibly async
       var adapter = get(this, '_adapter');
       if (adapter && adapter.find) { adapter.find(this, type, id); }
-      else { throw fmt("Adapter is either null or do not implement `find` method", this); }
+      else { throw fmt("Adapter is either null or does not implement `find` method", this); }
     }
 
     return model;
@@ -286,7 +286,7 @@ DS.Store = Ember.Object.extend({
     if ((needed && get(needed, 'length') > 0) || query) {
       var adapter = get(this, '_adapter');
       if (adapter && adapter.findMany) { adapter.findMany(this, type, needed, query); }
-      else { throw fmt("Adapter is either null or do not implement `findMany` method", this); }
+      else { throw fmt("Adapter is either null or does not implement `findMany` method", this); }
     }
 
     return this.createModelArray(type, clientIds);
@@ -296,7 +296,7 @@ DS.Store = Ember.Object.extend({
     var array = DS.AdapterPopulatedModelArray.create({ type: type, content: Ember.A([]), store: this });
     var adapter = get(this, '_adapter');
     if (adapter && adapter.findQuery) { adapter.findQuery(this, type, query, array); }
-    else { throw fmt("Adapter is either null or do not implement `findQuery` method", this); }
+    else { throw fmt("Adapter is either null or does not implement `findQuery` method", this); }
     return array;
   },
 
@@ -362,20 +362,20 @@ DS.Store = Ember.Object.extend({
       var data = this.clientIdToHashMap(model.constructor);
 
       data[clientId] = hash;
-      model.set('data', hash);
+      model.send('setData', hash);
     }
 
-    model.adapterDidUpdate();
+    model.send('didCommit');
   },
 
   didDeleteRecords: function(array) {
     array.forEach(function(model) {
-      model.adapterDidDelete();
+      model.send('didCommit');
     });
   },
 
   didDeleteRecord: function(model) {
-    model.adapterDidDelete();
+    model.send('didCommit');
   },
 
   didCreateRecords: function(type, array, hashes) {
@@ -391,38 +391,55 @@ DS.Store = Ember.Object.extend({
       clientId = get(model, 'clientId');
 
       data[clientId] = hash;
-      set(model, 'data', hash);
+      model.send('setData', hash);
 
       idToClientIdMap[id] = clientId;
       idList.push(id);
 
-      model.adapterDidUpdate();
+      model.send('didCommit');
     }
   },
 
   didCreateRecord: function(model, hash) {
     var type = model.constructor;
 
-    var id, clientId, primaryKey = getPath(type, 'proto.primaryKey');
+    var id, clientId, primaryKey;
 
     var idToClientIdMap = this.idToClientIdMap(type);
     var data = this.clientIdToHashMap(type);
     var idList = this.idList(type);
 
-    id = hash[primaryKey];
+    // The hash is optional, but if it is not provided, the client must have
+    // provided a primary key.
+
+    primaryKey = getPath(type, 'proto.primaryKey');
+
+    // TODO: Make ember_assert more flexible and convert this into an ember_assert
+    if (hash) {
+      ember_assert("The server must provide a primary key: " + primaryKey, get(hash, primaryKey));
+    } else {
+      ember_assert("The server did not return data, and you did not create a primary key (" + primaryKey + ") on the client", get(get(model, 'data'), primaryKey));
+    }
+
+    // If a hash was provided, index it under the model's client ID
+    // and update the model.
+    if (arguments.length === 2) {
+      id = hash[primaryKey];
+
+      data[clientId] = hash;
+      set(model, 'data', hash);
+    }
 
     clientId = get(model, 'clientId');
-    data[clientId] = hash;
-    set(model, 'data', hash);
 
     idToClientIdMap[id] = clientId;
     idList.push(id);
 
-    model.adapterDidUpdate();
+    model.send('didCommit');
   },
 
   recordWasInvalid: function(record, errors) {
-    record.wasInvalid(errors);
+    record.send('becameInvalid', errors);
   },
 
   // ................
@@ -602,8 +619,7 @@ DS.Store = Ember.Object.extend({
 
       var model = models[clientId];
       if (model) {
-        model.willLoadData();
-        model.setData(hash);
+        model.send('setData', hash);
       }
     } else {
       clientId = this.pushHash(hash, id, type);
@@ -672,12 +688,12 @@ DS.Store = Ember.Object.extend({
   // . MODEL MATERIALIZATION .
   // .........................
 
-  createModel: function(type, clientId) {
+  materializeRecord: function(type, clientId) {
     var model;
 
-    get(this, 'models')[clientId] = model = type.create({ store: this, clientId: clientId });
+    get(this, 'models')[clientId] = model = type._create({ store: this, clientId: clientId });
     set(model, 'clientId', clientId);
-    model.loadingData();
+    model.send('loadingData');
     return model;
   }
 });

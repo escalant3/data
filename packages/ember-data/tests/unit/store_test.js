@@ -79,7 +79,7 @@ test("the updated state", function() {
 });
 
 test("the saving state", function() {
-  stateName = "loaded.updated.saving";
+  stateName = "loaded.updated.inFlight";
   isTrue("isLoaded");
   isTrue("isDirty");
   isTrue("isSaving");
@@ -97,7 +97,7 @@ test("the deleted state", function() {
 });
 
 test("the deleted.saving state", function() {
-  stateName = "deleted.saving";
+  stateName = "deleted.inFlight";
   isTrue("isLoaded");
   isTrue("isDirty");
   isTrue("isSaving");
@@ -182,7 +182,9 @@ test("DS.Store has a load method to load in an Array of records", function() {
 
 test("DS.Store loads individual models without explicit IDs", function() {
   var store = DS.Store.create();
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({
+    name: DS.attr('string')
+  });
 
   store.load(Person, { id: 1, name: "Tom Dale" });
 
@@ -192,7 +194,7 @@ test("DS.Store loads individual models without explicit IDs", function() {
 
 test("DS.Store loads individual models without explicit IDs with a custom primaryKey", function() {
   var store = DS.Store.create();
-  var Person = DS.Model.extend({ primaryKey: 'key' });
+  var Person = DS.Model.extend({ name: DS.attr('string'), primaryKey: 'key' });
 
   store.load(Person, { key: 1, name: "Tom Dale" });
 
@@ -235,7 +237,7 @@ test("DS.Store passes only needed guids to findMany", function() {
 test("loadMany extracts ids from an Array of hashes if no ids are specified", function() {
   var store = DS.Store.create();
 
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({ name: DS.attr('string') });
 
   store.loadMany(Person, array);
   equal(get(store.find(Person, 1), 'name'), "Scumbag Dale", "correctly extracted id for loaded data");
@@ -247,6 +249,7 @@ test("loadMany uses a model's primaryKey if one is provided to extract ids", fun
   var array = [{ key: 1, name: "Scumbag Dale" }, { key: 2, name: "Scumbag Katz" }, { key: 3, name: "Scumbag Bryn" }];
 
   var Person = DS.Model.extend({
+    name: DS.attr('string'),
     primaryKey: "key"
   });
 
@@ -257,7 +260,9 @@ test("loadMany uses a model's primaryKey if one is provided to extract ids", fun
 test("loadMany takes an optional Object and passes it on to the Adapter", function() {
   var passedQuery = { page: 1 };
 
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({
+    name: DS.attr('string')
+  });
 
   var adapter = DS.Adapter.create({
     findQuery: function(store, type, query) {
@@ -292,9 +297,11 @@ test("findAll(type) returns a model array of all records of a specific type", fu
   strictEqual(results, store.findAll(Person), "subsequent calls to findAll return the same modelArray)");
 });
 
-test("a new model of a particular type is created via store.create(type)", function() {
+test("a new model of a particular type is created via store.createRecord(type)", function() {
   var store = DS.Store.create();
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({
+    name: DS.attr('string')
+  });
 
   var person = store.createRecord(Person);
 
@@ -307,9 +314,11 @@ test("a new model of a particular type is created via store.create(type)", funct
   equal(get(person, 'name'), "Braaahm Dale", "Even if no hash is supplied, `set` still worked");
 });
 
-test("an initial data hash can be provided via store.create(type, hash)", function() {
+test("an initial data hash can be provided via store.createRecord(type, hash)", function() {
   var store = DS.Store.create();
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({
+    name: DS.attr('string')
+  });
 
   var person = store.createRecord(Person, { name: "Brohuda Katz" });
 
@@ -322,7 +331,9 @@ test("an initial data hash can be provided via store.create(type, hash)", functi
 
 test("if an id is supplied in the initial data hash, it can be looked up using `store.find`", function() {
   var store = DS.Store.create();
-  var Person = DS.Model.extend();
+  var Person = DS.Model.extend({
+    name: DS.attr('string')
+  });
 
   var person = store.createRecord(Person, { id: 1, name: "Brohuda Katz" });
 
@@ -392,6 +403,8 @@ test("a model receives a didUpdate callback when it has finished updating", func
   var callCount = 0;
 
   var Person = DS.Model.extend({
+    bar: DS.attr('string'),
+
     didUpdate: function() {
       callCount++;
     }
@@ -420,7 +433,7 @@ test("a model receives a didUpdate callback when it has finished updating", func
   equal(callCount, 1, "didUpdate called after update");
 });
 
-test("a model receives a didUpdate callback when it has finished updating", function() {
+test("a model receives a didCreate callback when it has finished updating", function() {
   var callCount = 0;
 
   var Person = DS.Model.extend({
@@ -431,7 +444,7 @@ test("a model receives a didUpdate callback when it has finished updating", func
 
   var adapter = DS.Adapter.create({
     createRecord: function(store, type, model) {
-      store.didCreateRecord(model, {});
+      store.didCreateRecord(model);
     }
   });
 
@@ -441,7 +454,7 @@ test("a model receives a didUpdate callback when it has finished updating", func
 
   equal(callCount, 0, "precond - didUpdate callback was not called yet");
 
-  var person = store.createRecord(Person, { name: "Newt Gingrich" });
+  var person = store.createRecord(Person, { id: 69, name: "Newt Gingrich" });
   store.commit();
 
   equal(callCount, 1, "didCreate called after commit");

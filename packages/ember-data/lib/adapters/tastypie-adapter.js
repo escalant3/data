@@ -66,7 +66,7 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
     this.ajax(url, "PUT", {
       data: data,
       success: function(json) {
-        store.didUpdateRecord(model, json[root]);
+        store.didUpdateRecord(model, json);
       }
     });
   },

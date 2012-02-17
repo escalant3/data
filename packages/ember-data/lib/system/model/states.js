@@ -8,8 +8,8 @@ var stateProperty = Ember.computed(function(key) {
 }).property();
 
 var isEmptyObject = function(object) {
-  for (var name in obj) {
-    if (obj.hasOwnProperty(name)) { return false; }
+  for (var name in object) {
+    if (object.hasOwnProperty(name)) { return false; }
   }
 
   return true;
@@ -67,14 +67,14 @@ var waitingOn = function(manager, object) {
       objectGuid = guidFor(object);
 
   var observer = function() {
-    if (!get(object, 'isDirty')) {
+    if (get(object, 'id')) {
       manager.send('doneWaitingOn', object);
-      Ember.removeObserver(object, 'isDirty', observer);
+      Ember.removeObserver(object, 'id', observer);
     }
   };
 
   pendingQueue[objectGuid] = [object, observer];
-  Ember.addObserver(object, 'isDirty', observer);
+  Ember.addObserver(object, 'id', observer);
 };
 
 // Implementation notes:
@@ -226,7 +226,7 @@ var DirtyState = DS.State.extend({
       deleteRecord: function(manager) {
         var model = get(manager, 'model'),
             pendingQueue = get(model, 'pendingQueue'),
-            object, observer, tuple;
+            tuple;
 
         // since we are leaving the pending state, remove any
         // observers we have registered on other records.
@@ -234,7 +234,7 @@ var DirtyState = DS.State.extend({
           if (!pendingQueue.hasOwnProperty(prop)) { continue; }
 
           tuple = pendingQueue[prop];
-          Ember.removeObserver(tuple[0], 'isDirty', tuple[1]);
+          Ember.removeObserver(tuple[0], 'id', tuple[1]);
         }
 
         manager.goToState('deleted');

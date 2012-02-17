@@ -1,6 +1,9 @@
 require("ember-data/core");
 require("ember-data/system/adapters");
 
+/*global jQuery*/
+var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
+
 /*
  * The DjangoTastypie Adapter extends the default RESTAdapter
  * from Ember.js in order to work with a REST interface provided

@@ -33,7 +33,27 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
    */
   bulkCommit: false,
 
-  
+  /**
+   * Objects with related objects generate a JSON circular parse error.
+   * This function captures that problem and transforms the association
+   * fields to the django-tastypie format
+   */
+  parseData: function(type, model){
+    var subtypeRoot;
+    var self = this;
+    
+    var data = get(model, 'data');
+    $.each(data, function(index, item){
+      // TODO It must be an easier way to access the type of the attributes of a model
+      if (type.PrototypeMixin.mixins.objectAt(1).properties[index].hasOwnProperty('_meta')) {
+        subtypeUrl = self.rootForType(type.PrototypeMixin.mixins.objectAt(1).properties[index]._meta.type);
+        subtypeUrl = [subtypeUrl, item.get('id')].join('/');
+        data[index] = '/' + self.getTastypieUrl(subtypeUrl);
+      }
+    });
+    return JSON.stringify(data);
+  },
+
   /* 
    * Create a record in the Django server. POST actions must
    * be enabled in the Resource
@@ -41,7 +61,7 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
   createRecord: function(store, type, model) {
     var root = this.rootForType(type);
 
-    var data = JSON.stringify(get(model, 'data'));
+    var data = this.parseData(type, model);
 
     this.ajax(root, "POST", {
       data: data,

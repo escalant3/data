@@ -17,6 +17,7 @@ DS.Model = Ember.Object.extend({
   isValid: retrieveFromCurrentState,
 
   clientId: null,
+  transaction: null,
 
   // because unknownProperty is used, any internal property
   // must be initialized here.
@@ -35,7 +36,7 @@ DS.Model = Ember.Object.extend({
 
   data: null,
   pendingQueue: null,
-  transaction: null,
+
   errors: null,
 
   didLoad: Ember.K,
@@ -64,7 +65,7 @@ DS.Model = Ember.Object.extend({
   },
 
   withTransaction: function(fn) {
-    var transaction = get(this, 'transaction') || getPath(this, 'store.defaultTransaction');
+    var transaction = get(this, 'transaction');
     if (transaction) { fn(transaction); }
   },
 

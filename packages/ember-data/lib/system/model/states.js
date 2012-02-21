@@ -219,7 +219,7 @@ var DirtyState = DS.State.extend({
 
     // A pending record whose transaction has not yet
     // started to commit is in this state.
-    uncommitted: DS.State.create({
+    uncommitted: DS.State.extend({
       // EVENTS
       setProperty: setProperty,
 
@@ -266,7 +266,7 @@ var DirtyState = DS.State.extend({
     // to commit is in this state. Since it has not yet
     // been sent to the adapter, it is not `inFlight`
     // until all of its dependencies have been committed.
-    committing: DS.State.create({
+    committing: DS.State.extend({
       // FLAGS
       isSaving: true,
 
@@ -279,9 +279,22 @@ var DirtyState = DS.State.extend({
         delete pendingQueue[objectGuid];
 
         if (isEmptyObject(pendingQueue)) {
-          var dirtyType = get(this, 'dirtyType');
-          manager.goToState(dirtyType + '.inFlight');
+          manager.send('doneWaiting');
         }
+      },
+
+      doneWaiting: function(manager) {
+        var model = get(manager, 'model'),
+            transaction = get(model, 'transaction');
+
+        // Now that the model is no longer pending, schedule
+        // the transaction to commit.
+        Ember.run.once(transaction, transaction.commit);
+      },
+
+      willCommit: function(manager) {
+        var dirtyType = get(this, 'dirtyType');
+        manager.goToState(dirtyType + '.inFlight');
       }
     })
   }),

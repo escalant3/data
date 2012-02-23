@@ -3,47 +3,6 @@ require("ember-data/system/transaction");
 
 var get = Ember.get, set = Ember.set, getPath = Ember.getPath, fmt = Ember.String.fmt;
 
-var OrderedSet = Ember.Object.extend({
-  init: function() {
-    this.clear();
-  },
-
-  clear: function() {
-    this.set('presenceSet', {});
-    this.set('list', Ember.NativeArray.apply([]));
-  },
-
-  add: function(obj) {
-    var guid = Ember.guidFor(obj),
-        presenceSet = get(this, 'presenceSet'),
-        list = get(this, 'list');
-
-    if (guid in presenceSet) { return; }
-
-    presenceSet[guid] = true;
-    list.pushObject(obj);
-  },
-
-  remove: function(obj) {
-    var guid = Ember.guidFor(obj),
-        presenceSet = get(this, 'presenceSet'),
-        list = get(this, 'list');
-
-    delete presenceSet[guid];
-    list.removeObject(obj);
-  },
-
-  isEmpty: function() {
-    return getPath(this, 'list.length') === 0;
-  },
-
-  forEach: function(fn, self) {
-    get(this, 'list').forEach(function(item) {
-      fn.call(self, item);
-    });
-  }
-});
-
 // Implementors Note:
 //
 //   The variables in this file are consistently named according to the following
@@ -114,7 +73,7 @@ DS.Store = Ember.Object.extend({
     var ret = modelArrays[clientId];
 
     if (!ret) {
-      ret = modelArrays[clientId] = OrderedSet.create();
+      ret = modelArrays[clientId] = Ember.OrderedSet.create();
     }
 
     return ret;
@@ -309,7 +268,7 @@ DS.Store = Ember.Object.extend({
       else { throw fmt("Adapter is either null or does not implement `findMany` method", this); }
     }
 
-    return this.createModelArray(type, clientIds);
+    return this.createManyArray(type, clientIds);
   },
 
   findQuery: function(type, query) {
@@ -477,8 +436,8 @@ DS.Store = Ember.Object.extend({
     this.updateModelArrayFilter(array, type, filter);
   },
 
-  createModelArray: function(type, clientIds) {
-    var array = DS.ModelArray.create({ type: type, content: clientIds, store: this });
+  createManyArray: function(type, clientIds) {
+    var array = DS.ManyArray.create({ type: type, content: clientIds, store: this });
 
     clientIds.forEach(function(clientId) {
       var modelArrays = this.modelArraysForClientId(clientId);
@@ -732,4 +691,3 @@ DS.Store = Ember.Object.extend({
     return this._super();
   }
 });
-

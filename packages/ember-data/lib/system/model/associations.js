@@ -3,13 +3,51 @@ var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
 require("ember-data/system/model/model");
 
 DS.Model.reopenClass({
-  typeForAssociation: function(association) {
-    var type = this.metaForProperty(association).type;
-    if (typeof type === 'string') {
-      type = getPath(this, type, false) || getPath(window, type);
-    }
-    return type;
-  }
+  typeForAssociation: function(name) {
+    return Ember.get(this, 'associationsByName')[name];
+  },
+
+  associations: Ember.computed(function() {
+    var map = Ember.Map.create();
+
+    this.eachComputedProperty(function(name, meta) {
+      if (meta.isAssociation) {
+        var type = meta.type,
+            typeList = map.get(type);
+
+        if (typeof type === 'string') {
+          type = getPath(this, type, false) || getPath(window, type);
+        }
+
+        if (!typeList) {
+          typeList = [];
+          map.set(type, typeList);
+        }
+
+        typeList.push({ name: name, kind: meta.kind });
+      }
+    });
+
+    return map;
+  }).cacheable(),
+
+  associationsByName: Ember.computed(function() {
+    var map = {}, type;
+
+    this.eachComputedProperty(function(name, meta) {
+      if (meta.isAssociation) {
+        type = meta.type;
+
+        if (typeof type === 'string') {
+          type = getPath(this, type, false) || getPath(window, type);
+        }
+
+        map[name] = type;
+      }
+    });
+
+    return map;
+  }).cacheable()
 });
 
 
@@ -29,6 +67,13 @@ var referencedFindRecord = function(store, type, data, key, one) {
 var hasAssociation = function(type, options, one) {
   var embedded = options && options.embedded,
     findRecord = embedded ? embeddedFindRecord : referencedFindRecord;
+
+  var meta = { type: type, isAssociation: true };
+  if (one) {
+    meta.kind = 'belongsTo';
+  } else {
+    meta.kind = 'hasMany';
+  }
 
   return Ember.computed(function(key, value) {
     var data = get(this, 'data'), ids, id, association,
@@ -65,7 +110,7 @@ var hasAssociation = function(type, options, one) {
 
       return association;
     }
-  }).property('data').cacheable().meta({ type: type });
+  }).property('data').cacheable().meta(meta);
 };
 
 DS.hasMany = function(type, options) {
@@ -74,6 +119,8 @@ DS.hasMany = function(type, options) {
 };
 
 DS.hasOne = function(type, options) {
-  ember_assert("The type passed to DS.hasOne must be defined", !!type);
+  ember_assert("The type passed to DS.belongsTo must be defined", !!type);
   return hasAssociation(type, options, true);
 };
+
+DS.belongsTo = DS.hasOne;

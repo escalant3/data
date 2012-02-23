@@ -11,6 +11,7 @@ DS.RESTAdapter = DS.Adapter.extend({
     this.ajax("/" + this.pluralize(root), "POST", {
       data: data,
       success: function(json) {
+        this.sideload(store, type, json, root);
         store.didCreateRecord(model, json[root]);
       }
     });
@@ -31,7 +32,9 @@ DS.RESTAdapter = DS.Adapter.extend({
 
     this.ajax("/" + this.pluralize(root), "POST", {
       data: data,
+
       success: function(json) {
+        this.sideload(store, type, json, plural);
         store.didCreateRecords(type, models, json[plural]);
       }
     });
@@ -49,6 +52,7 @@ DS.RESTAdapter = DS.Adapter.extend({
     this.ajax(url, "PUT", {
       data: data,
       success: function(json) {
+        this.sideload(store, type, json, root);
         store.didUpdateRecord(model, json[root]);
       }
     });
@@ -67,9 +71,10 @@ DS.RESTAdapter = DS.Adapter.extend({
       return get(model, 'data');
     });
 
-    this.ajax("/" + this.pluralize(root), "POST", {
+    this.ajax("/" + this.pluralize(root) + "/bulk", "PUT", {
       data: data,
       success: function(json) {
+        this.sideload(store, type, json, plural);
         store.didUpdateRecords(models, json[plural]);
       }
     });
@@ -83,6 +88,7 @@ DS.RESTAdapter = DS.Adapter.extend({
 
     this.ajax(url, "DELETE", {
       success: function(json) {
+        if (json) { this.sideload(store, type, json); }
         store.didDeleteRecord(model);
       }
     });
@@ -101,9 +107,10 @@ DS.RESTAdapter = DS.Adapter.extend({
       return get(model, 'id');
     });
 
-    this.ajax("/" + this.pluralize(root) + "/delete", "POST", {
+    this.ajax("/" + this.pluralize(root) + "/bulk", "DELETE", {
       data: data,
       success: function(json) {
+        if (json) { this.sideload(store, type, json); }
         store.didDeleteRecords(models);
       }
     });
@@ -117,6 +124,7 @@ DS.RESTAdapter = DS.Adapter.extend({
     this.ajax(url, "GET", {
       success: function(json) {
         store.load(type, json[root]);
+        this.sideload(store, type, json, root);
       }
     });
   },
@@ -128,6 +136,7 @@ DS.RESTAdapter = DS.Adapter.extend({
       data: { ids: ids },
       success: function(json) {
         store.loadMany(type, ids, json[plural]);
+        this.sideload(store, type, json, plural);
       }
     });
   },
@@ -138,6 +147,7 @@ DS.RESTAdapter = DS.Adapter.extend({
     this.ajax("/" + plural, "GET", {
       success: function(json) {
         store.loadMany(type, json[plural]);
+        this.sideload(store, type, json, plural);
       }
     });
   },
@@ -149,6 +159,7 @@ DS.RESTAdapter = DS.Adapter.extend({
       data: query,
       success: function(json) {
         modelArray.load(json[plural]);
+        this.sideload(store, type, json, plural);
       }
     });
   },
@@ -175,9 +186,46 @@ DS.RESTAdapter = DS.Adapter.extend({
   ajax: function(url, type, hash) {
     hash.url = url;
     hash.type = type;
-    hash.dataType = "json";
+    hash.dataType = 'json';
+    hash.contentType = 'application/json';
+    hash.context = this;
+
+    if (hash.data) {
+      hash.data = JSON.stringify(hash.data);
+    }
 
     jQuery.ajax(hash);
+  },
+
+  sideload: function(store, type, json, root) {
+    var sideloadedType, mappings;
+
+    for (var prop in json) {
+      if (!json.hasOwnProperty(prop)) { continue; }
+      if (prop === root) { continue; }
+
+      sideloadedType = type.typeForAssociation(prop);
+
+      if (!sideloadedType) {
+        mappings = get(this, 'mappings');
+
+        ember_assert("Your server returned a hash with the key " + prop + " but you have no mappings", !!mappings);
+
+        sideloadedType = get(get(this, 'mappings'), prop);
+
+        ember_assert("Your server returned a hash with the key " + prop + " but you have no mapping for it", !!sideloadedType);
+      }
+
+      this.loadValue(store, sideloadedType, json[prop]);
+    }
+  },
+
+  loadValue: function(store, type, value) {
+    if (value instanceof Array) {
+      store.loadMany(type, value);
+    } else {
+      store.load(type, value);
+    }
   }
 });
 

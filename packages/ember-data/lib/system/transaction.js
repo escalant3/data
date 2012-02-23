@@ -1,120 +1,11 @@
 var get = Ember.get, set = Ember.set, getPath = Ember.getPath, fmt = Ember.String.fmt;
 
-var OrderedSet = Ember.Object.extend({
-  init: function() {
-    this.clear();
-  },
-
-  clear: function() {
-    this.set('presenceSet', {});
-    this.set('list', Ember.NativeArray.apply([]));
-  },
-
-  add: function(obj) {
-    var guid = Ember.guidFor(obj),
-        presenceSet = get(this, 'presenceSet'),
-        list = get(this, 'list');
-
-    if (guid in presenceSet) { return; }
-
-    presenceSet[guid] = true;
-    list.pushObject(obj);
-  },
-
-  remove: function(obj) {
-    var guid = Ember.guidFor(obj),
-        presenceSet = get(this, 'presenceSet'),
-        list = get(this, 'list');
-
-    delete presenceSet[guid];
-    list.removeObject(obj);
-  },
-
-  isEmpty: function() {
-    return getPath(this, 'list.length') === 0;
-  },
-
-  forEach: function(fn, self) {
-    // allow mutation during iteration
-    get(this, 'list').slice().forEach(function(item) {
-      fn.call(self, item);
-    });
-  },
-
-  toArray: function() {
-    return get(this, 'list').slice();
-  }
-});
-
-/**
-  A Hash stores values indexed by keys. Unlike JavaScript's
-  default Objects, the keys of a Hash can be any JavaScript
-  object.
-
-  Internally, a Hash has two data structures:
-
-    `keys`: an OrderedSet of all of the existing keys
-    `values`: a JavaScript Object indexed by the
-      Ember.guidFor(key)
-
-  When a key/value pair is added for the first time, we
-  add the key to the `keys` OrderedSet, and create or
-  replace an entry in `values`. When an entry is deleted,
-  we delete its entry in `keys` and `values`.
-*/
-
-var Hash = Ember.Object.extend({
-  init: function() {
-    set(this, 'keys', OrderedSet.create());
-    set(this, 'values', {});
-  },
-
-  add: function(key, value) {
-    var keys = get(this, 'keys'), values = get(this, 'values');
-    var guid = Ember.guidFor(key);
-
-    keys.add(key);
-    values[guid] = value;
-
-    return value;
-  },
-
-  remove: function(key) {
-    var keys = get(this, 'keys'), values = get(this, 'values');
-    var guid = Ember.guidFor(key), value;
-
-    keys.remove(key);
-
-    value = values[guid];
-    delete values[guid];
-
-    return value;
-  },
-
-  fetch: function(key) {
-    var values = get(this, 'values');
-    var guid = Ember.guidFor(key);
-
-    return values[guid];
-  },
-
-  forEach: function(fn, binding) {
-    var keys = get(this, 'keys'),
-        values = get(this, 'values');
-
-    keys.forEach(function(key) {
-      var guid = Ember.guidFor(key);
-      fn.call(binding, key, values[guid]);
-    });
-  }
-});
-
 DS.Transaction = Ember.Object.extend({
   init: function() {
     set(this, 'dirty', {
-      created: Hash.create(),
-      updated: Hash.create(),
-      deleted: Hash.create()
+      created: Ember.Map.create(),
+      updated: Ember.Map.create(),
+      deleted: Ember.Map.create()
     });
   },
 
@@ -124,22 +15,29 @@ DS.Transaction = Ember.Object.extend({
     return store.createRecord(type, hash, this);
   },
 
-  add: function(model) {
-    var modelTransaction = get(model, 'transaction'),
+  add: function(record) {
+    // we could probably make this work if someone has a valid use case. Do you?
+    ember_assert("Once a record has changed, you cannot move it into a different transaction", !get(record, 'isDirty'));
+
+    var modelTransaction = get(record, 'transaction'),
         defaultTransaction = getPath(this, 'store.defaultTransaction');
 
     ember_assert("Models cannot belong to more than one transaction at a time.", modelTransaction === defaultTransaction);
 
-    set(model, 'transaction', this);
+    set(record, 'transaction', this);
   },
 
   modelBecameDirty: function(kind, model) {
     var dirty = get(get(this, 'dirty'), kind),
         type = model.constructor;
 
-    var models = dirty.fetch(type);
+    var models = dirty.get(type);
 
-    models = models || dirty.add(type, OrderedSet.create());
+    if (!models) {
+      models = Ember.OrderedSet.create();
+      dirty.set(type, models);
+    }
+
     models.add(model);
   },
 
@@ -148,7 +46,7 @@ DS.Transaction = Ember.Object.extend({
         type = model.constructor,
         defaultTransaction = getPath(this, 'store.defaultTransaction');
 
-    var models = dirty.fetch(type);
+    var models = dirty.get(type);
     models.remove(model);
 
     set(model, 'transaction', defaultTransaction);

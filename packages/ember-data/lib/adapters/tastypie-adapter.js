@@ -42,16 +42,15 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
     var subtypeRoot;
     var self = this;
     
-    var data = get(model, 'data');
-    $.each(data, function(index, item){
-      // TODO It must be an easier way to access the type of the attributes of a model
-      if (type.PrototypeMixin.mixins.objectAt(1).properties[index].hasOwnProperty('_meta')) {
-        subtypeUrl = self.rootForType(type.PrototypeMixin.mixins.objectAt(1).properties[index]._meta.type);
+    var jsonData = model.toJSON();
+    $.each(jsonData, function(index, item){
+      if (type.metaForProperty(index).isAssociation) {
+        subtypeUrl = self.rootForType(type.metaForProperty(index).type);
         subtypeUrl = [subtypeUrl, item.get('id')].join('/');
-        data[index] = '/' + self.getTastypieUrl(subtypeUrl);
+        jsonData[index] = '/' + self.getTastypieUrl(subtypeUrl);
       }
     });
-    return JSON.stringify(data);
+    return JSON.stringify(jsonData);
   },
 
   /* 
@@ -79,7 +78,7 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
     var id = get(model, 'id');
     var root = this.rootForType(type);
 
-    var data = JSON.stringify(get(model, 'data'));
+    var data = this.parseData(type, model);
 
     var url = [root, id].join("/");
 

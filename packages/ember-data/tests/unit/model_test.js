@@ -93,15 +93,15 @@ test("a DS.Model can describe String attributes", function() {
   convertsFromServer('string', undefined, null);
 });
 
-test("a DS.Model can describe Integer attributes", function() {
-  converts('integer', "1", 1);
-  converts('integer', "0", 0);
-  converts('integer', 1, 1);
-  converts('integer', 0, 0);
-  converts('integer', null, null);
-  converts('integer', undefined, null);
-  converts('integer', true, 1);
-  converts('integer', false, 0);
+test("a DS.Model can describe Number attributes", function() {
+  converts('number', "1", 1);
+  converts('number', "0", 0);
+  converts('number', 1, 1);
+  converts('number', 0, 0);
+  converts('number', null, null);
+  converts('number', undefined, null);
+  converts('number', true, 1);
+  converts('number', false, 0);
 });
 
 test("a DS.Model can describe Boolean attributes", function() {
@@ -184,13 +184,20 @@ test("it can specify which key to use when looking up properties on the hash", f
 test("toJSON returns a hash containing the JSON representation of the record", function() {
   var Model = DS.Model.extend({
     firstName: DS.attr('string'),
-    lastName: DS.attr('string', { key: 'last_name' })
+    lastName: DS.attr('string', { key: 'last_name' }),
+    country: DS.attr('string', { defaultValue: 'US' }),
+    isHipster: DS.attr('boolean', { defaultValue: false })
   });
 
-  store.load(Model, { id: 1, firstName: "Steve", last_name: "Holt", other: "none" });
+  store.load(Model, { id: 1, firstName: "Tom", last_name: "Dale", other: "none" });
   var record = store.find(Model, 1);
 
-  deepEqual(record.toJSON(), { id: 1, firstName: "Steve", last_name: "Holt" }, "the data is extracted by attribute");
+  set(record, 'isHipster', true);
+
+  deepEqual(record.toJSON(), { id: 1, firstName: "Tom", last_name: "Dale", country: 'US', isHipster: true }, "the data is extracted by attribute");
+
+  record = Model.createRecord({ firstName: "Yehuda", lastName: "Katz", country: null });
+  deepEqual(record.toJSON(), { firstName: "Yehuda", last_name: "Katz", country: null, isHipster: false }, "the data is extracted by attribute");
 });
 
 var Person, store, array;
@@ -209,6 +216,20 @@ test("a DS.Model can update its attributes", function() {
 
   set(person, 'name', "Brohuda Katz");
   equal(get(person, 'name'), "Brohuda Katz", "setting took hold");
+});
+
+test("a DS.Model can have a defaultValue", function() {
+  var Tag = DS.Model.extend({
+    name: DS.attr('string', { defaultValue: "unknown" })
+  });
+
+  var tag = Tag.createRecord();
+
+  equal(get(tag, 'name'), "unknown", "the default value is found");
+
+  set(tag, 'name', null);
+
+  equal(get(tag, 'name'), null, "null doesn't shadow defaultValue");
 });
 
 test("it should modify the property of the hash specified by the `key` option", function() {

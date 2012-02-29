@@ -7,10 +7,7 @@ DS.Model.reopenClass({
     var map = Ember.Map.create();
 
     this.eachComputedProperty(function(name, meta) {
-      if (meta.isAttribute) {
-        meta.key = meta.key || name;
-        map.set(name, meta);
-      }
+      if (meta.isAttribute) { map.set(name, meta); }
     });
 
     return map;
@@ -26,7 +23,7 @@ DS.attr = function(type, options) {
 
   options = options || {};
 
-  var meta = { type: type, isAttribute: true, key: options.key };
+  var meta = { type: type, isAttribute: true, options: options };
 
   return Ember.computed(function(key, value) {
     var data;
@@ -39,6 +36,10 @@ DS.attr = function(type, options) {
     } else {
       data = get(this, 'data');
       value = get(data, key);
+
+      if (value === undefined) {
+        value = options.defaultValue;
+      }
     }
 
     return transformFrom(value);
@@ -59,7 +60,7 @@ DS.attr.transforms = {
     }
   },
 
-  integer: {
+  number: {
     from: function(serialized) {
       return Ember.none(serialized) ? null : Number(serialized);
     },

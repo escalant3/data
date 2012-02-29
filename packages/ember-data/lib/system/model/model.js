@@ -130,9 +130,14 @@ DS.Model = Ember.Object.extend({
     }
 
     attributes.forEach(function(name, meta) {
-      var key = meta.key || name;
+      var key = meta.options.key || name,
+          value = get(data, key)
 
-      result[key] = get(data, key);
+      if (value === undefined) {
+        value = meta.options.defaultValue;
+      }
+
+      result[key] = value;
     }, this);
 
     return result;

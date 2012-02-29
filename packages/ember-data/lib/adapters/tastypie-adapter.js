@@ -47,14 +47,17 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
    */
   parseData: function(type, model){
     var self = this;
-    var id;
+    var id, value;
     
     var jsonData = model.toJSON();
     var associations = get(type, 'associationsByName');
 
     $.each(associations, function(key){
-      id = model.get(key).get('id');
-      jsonData[key] = self.getItemUrl(type, key, id);
+      value = model.get(key);
+      if (!!value){
+        id = value.get('id');
+        jsonData[key] = self.getItemUrl(type, key, id);
+      }
     });
 
     return JSON.stringify(jsonData);

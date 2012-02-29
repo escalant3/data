@@ -20,6 +20,13 @@ var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
  */
 
 DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
+  /*
+   * Set this parameter if you are planning to do cross-site
+   * requests to the destination domain. Remember trailing slash
+   */
+
+  serverDomain: "",
+
   /* 
    * This is the default Tastypie url found in the documentation.
    * You may change it if necessary when creating the adapter
@@ -39,17 +46,17 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
    * fields to the django-tastypie format
    */
   parseData: function(type, model){
-    var subtypeRoot;
     var self = this;
+    var id;
     
     var jsonData = model.toJSON();
-    $.each(jsonData, function(index, item){
-      if (type.metaForProperty(index).isAssociation) {
-        subtypeUrl = self.rootForType(type.metaForProperty(index).type);
-        subtypeUrl = [subtypeUrl, item.get('id')].join('/');
-        jsonData[index] = '/' + self.getTastypieUrl(subtypeUrl);
-      }
+    var associations = get(type, 'associationsByName');
+
+    $.each(associations, function(key){
+      id = model.get(key).get('id');
+      jsonData[key] = self.getItemUrl(type, key, id);
     });
+
     return JSON.stringify(jsonData);
   },
 
@@ -143,9 +150,16 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
     });
   },
 
+  getItemUrl: function(type, key, id){
+    var url;
+    ember_assert("tastypieApiUrl parameters is mandatory.", !!this.tastypieApiUrl);
+    url = this.rootForType(type.metaForProperty(key).type);
+    return ["", this.tastypieApiUrl.slice(0,-1), url, id, ""].join('/');
+  },
+
   getTastypieUrl: function(url){
     ember_assert("tastypieApiUrl parameters is mandatory.", !!this.tastypieApiUrl);
-    return this.tastypieApiUrl + url + "/";
+    return this.serverDomain + this.tastypieApiUrl + url + "/";
  
   },
 

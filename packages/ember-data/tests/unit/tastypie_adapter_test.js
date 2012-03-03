@@ -270,16 +270,15 @@ test("finding many people by a list of IDs", function() {
     equal(get(person, 'isLoaded'), false, "the person is being loaded");
   });
 
-  expectUrl("api/v1/person/1,2,3/");
+  expectUrl("api/v1/person/set/1;2;3/");
   expectType("GET");
-  expectData({ ids: [ 1, 2, 3 ] });
 
-  ajaxHash.success(
+  ajaxHash.success({"objects":
     [
       { id: 1, name: "Rein Heinrichs" },
       { id: 2, name: "Tom Dale" },
       { id: 3, name: "Yehuda Katz" }
-    ]
+    ]}
   );
 
   var rein = people.objectAt(0);

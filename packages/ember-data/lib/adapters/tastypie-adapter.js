@@ -118,12 +118,23 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
   },
 
   find: function(store, type, id) {
+    // FindMany array through subset of resources
+    if (id instanceof Array) {
+      id = "set/" + id.join(";");
+    }
+
     var root = this.rootForType(type);
     var url = [root, id].join("/");
 
     this.ajax(url, "GET", {
       success: function(json) {
-        store.load(type, json);
+        // Loads collection for findMany
+        if (json.hasOwnProperty("objects")) {
+          store.loadMany(type, json["objects"]);
+        // Loads unique element with find by id
+        } else {
+          store.load(type, json);
+        }
       }
     });
   },

@@ -4,7 +4,8 @@ require("ember-data/system/model/model");
 
 DS.Model.reopenClass({
   typeForAssociation: function(name) {
-    return Ember.get(this, 'associationsByName')[name];
+    var association = get(this, 'associationsByName').get(name);
+    return association && association.type;
   },
 
   associations: Ember.computed(function() {
@@ -17,6 +18,7 @@ DS.Model.reopenClass({
 
         if (typeof type === 'string') {
           type = getPath(this, type, false) || getPath(window, type);
+          meta.type = type;
         }
 
         if (!typeList) {
@@ -32,17 +34,19 @@ DS.Model.reopenClass({
   }).cacheable(),
 
   associationsByName: Ember.computed(function() {
-    var map = {}, type;
+    var map = Ember.Map.create(), type;
 
     this.eachComputedProperty(function(name, meta) {
       if (meta.isAssociation) {
+        meta.key = name;
         type = meta.type;
 
         if (typeof type === 'string') {
           type = getPath(this, type, false) || getPath(window, type);
+          meta.type = type;
         }
 
-        map[name] = type;
+        map.set(name, meta);
       }
     });
 
@@ -68,7 +72,7 @@ var hasAssociation = function(type, options, one) {
   var embedded = options && options.embedded,
     findRecord = embedded ? embeddedFindRecord : referencedFindRecord;
 
-  var meta = { type: type, isAssociation: true };
+  var meta = { type: type, isAssociation: true, options: options || {} };
   if (one) {
     meta.kind = 'belongsTo';
   } else {
@@ -84,32 +88,24 @@ var hasAssociation = function(type, options, one) {
     }
 
     key = (options && options.key) ? options.key : key;
-
-    if (arguments.length === 1){
-      //getter
-      if (one) {
+    if (one) {
+      if (arguments.length === 2) {
+        data.setAssociation(key, get(value, 'clientId'));
+        // put the client id in `key` in the data hash
+        return value;
+      } else {
         id = findRecord(store, type, data, key, true);
         association = id ? store.find(type, id) : null;
-      } else {
-        ids = findRecord(store, type, data, key);
-        association = store.findMany(type, ids);
-        set(association, 'parentRecord', this);
+
+        // if we have an association, store its client id in `key` in the data hash
       }
-
-      return association;
-
     } else {
-      // setter
-      if (one) {
-        association = store.find(type, value);
-      } else {
-        association = store.findMany(type, value);
-      }
-      data[key] = association;
-      this.set('data', data);
-
-      return association;
+      ids = findRecord(store, type, data, key);
+      association = store.findMany(type, ids);
+      set(association, 'parentRecord', this);
     }
+
+    return association;
   }).property('data').cacheable().meta(meta);
 };
 

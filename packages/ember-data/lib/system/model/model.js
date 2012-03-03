@@ -11,13 +11,17 @@ var retrieveFromCurrentState = Ember.computed(function(key) {
 var DataProxy = function(record) {
   this.record = record;
   this.unsavedData = {};
+  this.associations = {};
 };
 
 DataProxy.prototype = {
   get: function(key) { return Ember.get(this, key); },
   set: function(key, value) { return Ember.set(this, key, value); },
 
-  // TODO: Memoize
+  setAssociation: function(key, value) {
+    this.associations[key] = value;
+  },
+
   savedData: function() {
     var savedData = this._savedData;
     if (savedData) { return savedData; }
@@ -27,7 +31,7 @@ DataProxy.prototype = {
         store = get(record, 'store');
 
     if (store) {
-      savedData = store.dataForClientId(record.constructor, clientId);
+      savedData = store.dataForRecord(record);
       this._savedData = savedData;
       return savedData;
     }
@@ -35,9 +39,20 @@ DataProxy.prototype = {
 
   unknownProperty: function(key) {
     var unsavedData = this.unsavedData,
-        savedData = this.savedData();
+        associations = this.associations,
+        savedData = this.savedData(),
+        store;
 
-    var value = unsavedData[key];
+    var value = unsavedData[key], association;
+
+    // if this is a belongsTo association, this will
+    // be a clientId.
+    association = associations[key];
+
+    if (association !== undefined) {
+      store = get(this.record, 'store');
+      return store.clientIdToId[association];
+    }
 
     if (savedData && value === undefined) {
       value = savedData[key];
@@ -116,28 +131,146 @@ DS.Model = Ember.Object.extend({
     return data && get(data, primaryKey);
   }).property('primaryKey', 'data'),
 
-  toJSON: function() {
-    var data = get(this, 'data'),
-        result = {},
-        type = this.constructor,
-        attributes = get(type, 'attributes'),
-        associations = get(type, 'associationsByName'),
-        primaryKey = get(this, 'primaryKey'),
-        id = get(this, 'id');
+  // The following methods are callbacks invoked by `getJSON`. You
+  // can override one of the callbacks to override specific behavior,
+  // or getJSON itself.
+  //
+  // If you override getJSON, you can invoke these callbacks manually
+  // to get the default behavior.
 
-    if (id) {
-      result[primaryKey] = id;
-    }
+  /**
+    Add the record's primary key to the JSON hash.
 
+    The default implementation uses the record's specified `primaryKey`
+    and the `id` computed property, which are passed in as parameters.
+
+    @param {Object} json the JSON hash being built
+    @param {Number|String} id the record's id
+    @param {String} key the primaryKey for the record
+  */
+  addIdToJSON: function(json, id, key) {
+    if (id) { json[key] = id; }
+  },
+
+  /**
+    Add the attributes' current values to the JSON hash.
+
+    The default implementation gets the current value of each
+    attribute from the `data`, and uses a `defaultValue` if
+    specified in the `DS.attr` definition.
+
+    @param {Object} json the JSON hash being build
+    @param {Ember.Map} attributes a Map of attributes
+    @param {DataProxy} data the record's data, accessed with `get` and `set`.
+  */
+  addAttributesToJSON: function(json, attributes, data) {
     attributes.forEach(function(name, meta) {
-      var key = meta.options.key || name,
-          value = get(data, key)
+      var key = meta.key(this.constructor),
+          value = get(data, key);
 
       if (value === undefined) {
         value = meta.options.defaultValue;
       }
 
-      result[key] = value;
+      json[key] = value;
+    }, this);
+  },
+
+  /**
+    Add the value of a `hasMany` association to the JSON hash.
+
+    The default implementation honors the `embedded` option
+    passed to `DS.hasMany`. If embedded, `toJSON` is recursively
+    called on the child records. If not, the `id` of each
+    record is added.
+
+    Note that if a record is not embedded and does not
+    yet have an `id` (usually provided by the server), it
+    will not be included in the output.
+
+    @param {Object} json the JSON hash being built
+    @param {DataProxy} data the record's data, accessed with `get` and `set`.
+    @param {Object} meta information about the association
+    @param {Object} options options passed to `toJSON`
+  */
+  addHasManyToJSON: function(json, data, meta, options) {
+    var key = meta.key,
+        manyArray = get(this, key),
+        records = [],
+        clientId, id;
+
+    if (meta.options.embedded) {
+      // TODO: Avoid materializing embedded hashes if possible
+      manyArray.forEach(function(record) {
+        records.push(record.toJSON(options));
+      });
+    } else {
+      var clientIds = get(manyArray, 'content');
+
+      for (var i=0, l=clientIds.length; i<l; i++) {
+        clientId = clientIds[i];
+        id = get(this, 'store').clientIdToId[clientId];
+
+        if (id !== undefined) {
+          records.push(id);
+        }
+      }
+    }
+
+    json[key] = records;
+  },
+
+  /**
+    Add the value of a `belongsTo` association to the JSON hash.
+
+    The default implementation always includes the `id`.
+
+    @param {Object} json the JSON hash being built
+    @param {DataProxy} data the record's data, accessed with `get` and `set`.
+    @param {Object} meta information about the association
+    @param {Object} options options passed to `toJSON`
+  */
+  addBelongsToToJSON: function(json, data, meta, options) {
+    var key = meta.key, id;
+
+    if (id = data.get(key)) {
+      json[key] = id;
+    }
+  },
+
+  /**
+    Create a JSON representation of the record, including its `id`,
+    attributes and associations. Honor any settings defined on the
+    attributes or associations (such as `embedded` or `key`).
+  */
+  toJSON: function(options) {
+    var data = get(this, 'data'),
+        result = {},
+        type = this.constructor,
+        attributes = get(type, 'attributes'),
+        primaryKey = get(this, 'primaryKey'),
+        id = get(this, 'id'),
+        store = get(this, 'store'),
+        associations;
+
+    options = options || {};
+
+    // delegate to `addIdToJSON` callback
+    this.addIdToJSON(result, id, primaryKey);
+
+    // delegate to `addAttributesToJSON` callback
+    this.addAttributesToJSON(result, attributes, data);
+
+    associations = get(type, 'associationsByName');
+
+    // add associations, delegating to `addHasManyToJSON` and
+    // `addBelongsToToJSON`.
+    associations.forEach(function(key, meta) {
+      if (options.associations && meta.kind === 'hasMany') {
+        this.addHasManyToJSON(result, data, meta, options);
+      } else if (meta.kind === 'belongsTo') {
+        this.addBelongsToToJSON(result, data, meta, options);
+      }
     }, this);
 
     return result;
@@ -212,6 +345,17 @@ DS.Model = Ember.Object.extend({
       ember_assert("You attempted to set the " + key + " property on a model without defining an attribute.", false);
     } else {
       return this._super(key, value);
+    }
+  },
+
+  namingConvention: {
+    keyToJSONKey: function(key) {
+      // TODO: Strip off `is` from the front. Example: `isHipster` becomes `hipster`
+      return Ember.String.decamelize(key);
+    },
+
+    foreignKey: function(key) {
+      return key + '_id';
     }
   }
 });

@@ -1,6 +1,3 @@
-require("ember-data/core");
-require("ember-data/system/adapters");
-
 /*global jQuery*/
 var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
 
@@ -46,8 +43,21 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
    * fields to the django-tastypie format
    */
   parseData: function(type, model){
+    var self = this;
+    var value;
     
     var jsonData = model.toJSON({ associations: true });
+    
+    var associations = get(type, 'associationsByName');
+
+    associations.forEach(function(key, meta){
+      value = jsonData[key];
+      if (!!value){
+        if (meta.kind === "belongsTo") {
+          jsonData[key] = self.getItemUrl(type, key, value);
+        }
+      }
+    });
 
     return JSON.stringify(jsonData);
   },

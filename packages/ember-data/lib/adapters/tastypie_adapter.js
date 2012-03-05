@@ -42,7 +42,7 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
    * This function captures that problem and transforms the association
    * fields to the django-tastypie format
    */
-  parseData: function(type, model){
+  parseData: function(type, model, raw){
     var self = this;
     var value;
     
@@ -59,7 +59,11 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
       }
     });
 
-    return JSON.stringify(jsonData);
+    if (raw) {
+      return jsonData;
+    } else {
+      return JSON.stringify(jsonData);
+    }
   },
 
   /* 
@@ -78,7 +82,34 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
       }
     });
   },
- 
+
+  /* 
+   * If bulkCommit is set to true, this method creates
+   * several objects in a single PATCH requuest
+   */
+  createRecords: function(store, type, models) {
+    if (get(this, 'bulkCommit') === false) {
+      return this._super(store, type, models);
+    }
+
+    var root = this.rootForType(type);
+    var self = this;
+
+    var data = {};
+    data = models.map(function(model) {
+      return self.parseData(type, model, true);
+    });
+
+    data = JSON.stringify({objects: data});
+
+    this.ajax(root, "PATCH", {
+      data: data,
+      success: function(json) {
+        // TODO PATCH does not return anything
+      }
+    });
+  },
+
   /* 
    * Edit a record in the Django server. PUT actions must
    * be enabled in the Resource
@@ -112,6 +143,38 @@ DS.DjangoTastypieAdapter = DS.RESTAdapter.extend({
     this.ajax(url, "DELETE", {
       success: function(json) {
         store.didDeleteRecord(model);
+      }
+    });
+  },
+
+  deleteRecords: function(store, type, models) {
+    if (get(this, 'bulkCommit') === false) {
+      return this._super(store, type, models);
+    }
+//CREATE
+//$.ajax({type: "PATCH", url: "/api/v1/customer/", success: function(data){console.log(data)}, data: JSON.stringify({"objects":[{name: "Arnold2", date_next_visit: "", type_next_visit:"", visitLogs:[]}]}), contentType: "application/json"})
+//UPDATE
+// $.ajax({type: "PATCH", url: "/api/v1/customer/", success: function(data){console.log(data)}, data: JSON.stringify({"objects":[{name: "Arnold6", date_next_visit: "", type_next_visit:"", visitLogs:[], resource_uri:"/api/v1/customer/3/"}]}), contentType: "application/json"})
+//
+//DELETE
+//$.ajax({type: "PATCH", url: "/api/v1/customer/", success: function(data){console.log(data)}, data: JSON.stringify({"objects":[],"deleted_objects": ["/api/v1/customer/2/"]}), contentType: "application/json"})
+    var self = this;
+    var root = this.rootForType(type);
+
+    var data = {};
+    data = models.map(function(model) {
+      //return get(model, 'id');
+      return [root, get(model, 'id'), ""].join('/');
+    });
+
+    data = JSON.stringify({deleted_objects: data});
+    console.log(data);
+
+    this.ajax(root, "PATCH", {
+      data: data,
+      success: function(json) {
+        if (json) { this.sideload(store, type, json); }
+        store.didDeleteRecords(models);
       }
     });
   },

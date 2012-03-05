@@ -1,4 +1,4 @@
-require('ember-data/adapters/tastypie-adapter');
+require('ember-data/adapters/tastypie_adapter');
 
 var get = Ember.get, set = Ember.set;
 
@@ -334,7 +334,9 @@ test("finding people by a query", function() {
   });
 });
 
-test("creating several people (with bulkCommit) makes a POST to /people, with a data hash Array", function() {
+test("creating several people (with bulkCommit) makes a PATCH to /api/v1/person, with a data hash Array", function() {
+  set(adapter, 'bulkCommit', true);
+  
   var tom = store.createRecord(Person, { name: "Tom Dale" });
   var yehuda = store.createRecord(Person, { name: "Yehuda Katz" });
 
@@ -344,15 +346,15 @@ test("creating several people (with bulkCommit) makes a POST to /people, with a 
   store.commit();
   expectStates('saving');
 
-  expectUrl("/people", "the collection at the plural of the model name");
-  expectType("POST");
-  expectData({ people: [ { name: "Tom Dale" }, { name: "Yehuda Katz" } ] });
+  expectUrl("api/v1/person/", "the collection at the plural of the model name");
+  expectType("PATCH");
+  expectData(JSON.stringify({ objects: [ { name: "Tom Dale" }, { name: "Yehuda Katz" } ] }));
 
-  ajaxHash.success({ people: [ { id: 1, name: "Tom Dale" }, { id: 2, name: "Yehuda Katz" } ] });
-  expectStates('saving', false);
+  ajaxHash.success(null);
 
-  equal(tom, store.find(Person, 1), "it is now possible to retrieve the person by the ID supplied");
-  equal(yehuda, store.find(Person, 2), "it is now possible to retrieve the person by the ID supplied");
+  // TODO PATCH does not return the created data
+  //equal(tom, store.find(Person, 1), "it is now possible to retrieve the person by the ID supplied");
+  //equal(yehuda, store.find(Person, 2), "it is now possible to retrieve the person by the ID supplied");
 });
 
 test("deleting several people (with bulkCommit) makes a PUT to /people/bulk", function() {

@@ -1,6 +1,6 @@
 require("ember-data/system/model/states");
 
-var get = Ember.get, set = Ember.set, getPath = Ember.getPath;
+var get = Ember.get, set = Ember.set, getPath = Ember.getPath, none = Ember.none;
 
 var retrieveFromCurrentState = Ember.computed(function(key) {
   return get(getPath(this, 'stateManager.currentState'), key);
@@ -67,10 +67,7 @@ DataProxy.prototype = {
 
     unsavedData[key] = value;
 
-    // At the end of the run loop, notify model arrays that
-    // this record has changed so they can re-evaluate its contents
-    // to determine membership.
-    Ember.run.once(record, record.notifyHashWasUpdated);
+    record.hashWasUpdated();
 
     return value;
   },
@@ -231,13 +228,18 @@ DS.Model = Ember.Object.extend({
     @param {Object} options options passed to `toJSON`
   */
   addBelongsToToJSON: function(json, data, meta, options) {
-    var key = meta.key, id;
+    var key = meta.key, value, id;
 
-    if (id = data.get(key)) {
-      json[key] = id;
+    if (options.embedded) {
+      key = options.key || get(this, 'namingConvention').keyToJSONKey(key);
+      value = get(data.record, key);
+      json[key] = value ? value.toJSON(options) : null;
+    } else {
+      key = options.key || get(this, 'namingConvention').foreignKey(key);
+      id = data.get(key);
+      json[key] = none(id) ? null : id;
     }
   },
-
   /**
     Create a JSON representation of the record, including its `id`,
     attributes and associations. Honor any settings defined on the
@@ -355,8 +357,16 @@ DS.Model = Ember.Object.extend({
     },
 
     foreignKey: function(key) {
-      return key + '_id';
+      return Ember.String.decamelize(key) + '_id';
     }
+  },
+
+  /** @private */
+  hashWasUpdated: function() {
+    // At the end of the run loop, notify model arrays that
+    // this record has changed so they can re-evaluate its contents
+    // to determine membership.
+    Ember.run.once(this, this.notifyHashWasUpdated);
   }
 });
 

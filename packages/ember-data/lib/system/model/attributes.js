@@ -20,7 +20,7 @@ DS.Model.reopenClass({
 
     this.eachComputedProperty(function(name, meta) {
       if (meta.isAttribute && !meta.options.key) {
-        meta.options.key = name;
+        meta.options.key = namingConvention.keyToJSONKey(name, this);
       }
     }, this);
   }

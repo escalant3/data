@@ -49,6 +49,15 @@ var setProperty = function(manager, context) {
   set(data, key, value);
 };
 
+var setAssociation = function(manager, context) {
+  var key = context.key, value = context.value;
+
+  var model = get(manager, 'model'),
+      data = get(model, 'data');
+
+  data.setAssociation(key, value);
+};
+
 var didChangeData = function(manager) {
   var model = get(manager, 'model'),
       data = get(model, 'data');
@@ -120,6 +129,7 @@ var waitingOn = function(manager, object) {
 // super points to the class definition.
 var Uncommitted = Ember.Mixin.create({
   setProperty: setProperty,
+  setAssociation: setAssociation,
 
   deleteRecord: function(manager) {
     this._super(manager);
@@ -344,6 +354,8 @@ var DirtyState = DS.State.extend({
       manager.goToState('deleted');
     },
 
+    setAssociation: setAssociation,
+
     setProperty: function(manager, context) {
       setProperty(manager, context);
 
@@ -475,6 +487,11 @@ var states = {
           manager.goToState('updated');
         },
 
+        setAssociation: function(manager, context) {
+          setAssociation(manager, context);
+          manager.goToState('updated');
+        },
+
         didChangeData: didChangeData,
 
         deleteRecord: function(manager) {
@@ -503,7 +520,7 @@ var states = {
       // A record is in this state if it has already been
       // saved to the server, but there are new local changes
       // that have not yet been saved.
-      updated: updatedState,
+      updated: updatedState
     }),
 
     // A record is in this state if it was deleted from the store.
